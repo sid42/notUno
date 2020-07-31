@@ -1,13 +1,11 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
 import Peer from 'peerjs'
 
 var initPeer
 var initPeerConns = [] 
 var count = 0;
 
-class App extends React.Component {
+class RoomCreationForm extends React.Component {
   constructor(props){
     super(props)
     this.state ={
