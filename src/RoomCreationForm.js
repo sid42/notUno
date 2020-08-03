@@ -1,15 +1,15 @@
 import React from 'react';
 import Peer from 'peerjs'
 
-var initPeer
-var initPeerConns = [] 
-var count = 0;
-
 class RoomCreationForm extends React.Component {
   constructor(props){
     super(props)
     this.state ={
       roomId : '',
+      creationSuccessful: 'block',
+      initPeer,
+      initPeerConns = [],
+      count = 0
     }
     
     this.handleChange = this.handleChange.bind(this);
@@ -22,18 +22,18 @@ class RoomCreationForm extends React.Component {
   }
   
   create(id) {
-      initPeer = new Peer(id)
+      this.state.initPeer = new Peer(id)
   
-      initPeer.on('open', (data) => {
-        console.log('initPeer made')
-        console.log(initPeer)
+      this.state.initPeer.on('open', (data) => {
+        console.log('this.state.initPeer made')
+        console.log(this.state.initPeer)
       })
-      initPeer.on('error', (data) => {
+      this.state.initPeer.on('error', (data) => {
         console.log('Init peer connection failed')
         console.log(data)
       })
-      initPeer.on('connection', (conn) => {
-        initPeerConns.push(conn)
+      this.state.initPeer.on('connection', (conn) => {
+        this.state.initPeerConns.push(conn)
         console.log('connection made in initPeer')
         console.log((conn))
         conn.on('data', (data) => {
@@ -73,15 +73,15 @@ class RoomCreationForm extends React.Component {
 
   render(){
     return (
-      <div>
+      <div style={{display: this.state.creationSuccessful }}>
         <input onChange={this.handleChange} type="text" value={this.state.roomId}/> <br/>
   
         <button onClick={() => {console.log(this.state.roomId); this.create(this.state.roomId)}}>Create</button>
-        <button onClick={() => initPeerConns[0].send('button hello')}>Send</button>
-        <button onClick={() => this.join(this.state.roomId, count++)}>Join</button>
+        <button onClick={() => this.state.initPeerConns[0].send('button hello')}>Send</button>
+        <button onClick={() => {this.setState({count: count++});this.join(this.state.roomId, this.state.count)}}>Join</button>
       </div>
     );
   }
 }
 
-export default App;
+export default RoomCreationForm;
