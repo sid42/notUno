@@ -30,6 +30,7 @@ class App extends React.Component {
     this.join = this.join.bind(this)
     this.create = this.create.bind(this)
     this.emit = this.emit.bind(this)
+    this.initializePlayerInfo = this.initializePlayerInfo.bind(this)
   }
   
   deck = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9', 'gskip', 'grev', 'gp2', 
@@ -55,27 +56,53 @@ class App extends React.Component {
       createdInitPeer.on('open', (data) => {
         this.setState({creationSuccessful: 'none'})
         this.setState({playerId: playerId})
-        this.state.gameState.playerCount++;
-        
-        // creating deck/player info for init peer
-        var temp = []
-        while (temp.length != 7){
-          var key = Math.floor(Math.random() * 52)
-          if (!temp.includes(key)){
-            this.state.gameState.cardsHandedOut.push(key)
-            // this.state.gameState.playerInfo[playerId].cards.push(this.deck[key])
-            temp.push(this.deck[key])
-          }
-        }
-        this.state.gameState.playerInfo[playerId] = {
-          cardCount : 7,
-          cards : temp,
-          name : playerId 
-        }
-        
+        this.setState({roomId: roomId})
+        this.setState({gameState : this.initializePlayerInfo(this.state, true)})
+
         console.log('createdInitPeer made')
         console.log(this.state.gameState)
-        this.forceUpdate()
+        // this.forceUpdate()
+        
+        
+        createdInitPeer.on('connection', (conn) => {
+          console.log('connection made in initPeer, initialising player peer')
+          
+          conn.on('open', () => {
+            console.log('connection open sending data');
+            this.state.initPeerConns.push(conn)
+            var outgoingData = {
+              header : 'Initialize Player Info',
+              gameState : this.state.gameState
+            }
+            console.log(this.state.gameState.playerInfo)
+            conn.send(outgoingData)
+            console.log(outgoingData)
+            
+            // console.log(conn.send(outgoingData));
+            conn.on('data', (data) => {
+              console.log('receiving data ' + data)
+              
+              switch (data.header) {
+                
+                case 'Update Root Peer GameState after Init Connection':
+                  console.log('Updating root peer with new connection data');
+                  this.setState({gameState : data.gameState}, () => {
+                    var outgoingData = {
+                      header : 'Update Peers on New Connection',
+                      gameState : this.state.gameState
+                    }
+                    this.emit(outgoingData)
+                  })
+                  // this.forceUpdate()
+    
+                  break;
+                
+                default:
+    
+              }
+            })
+          })
+        })
       })
 
       // error in creating root peer
@@ -90,45 +117,7 @@ class App extends React.Component {
       // gamestate data to connected peer which in turn sends back updated data
       // to root peer which in turn sends it to the remaining peers
       // (( maybe using websockets would have been a better idea... ))
-      createdInitPeer.on('connection', (conn) => {
-        console.log('connection made in initPeer, initialising player peer')
-        conn.on('open', () => {
-          console.log('connection open sending data');
-          this.state.initPeerConns.push(conn)
-          var outgoingGameStateData = {
-            playerCount : this.state.gameState.playerCount,
-            cardsHandedOut : this.state.gameState.cardsHandedOut, 
-            turn : '',
-            playerInfo : this.state.gameState.playerInfo
-          }
-          var outgoingData = {
-            header : 'Initialize Player Info',
-            gameState : outgoingGameStateData
-          }
-          console.log(outgoingData);
-          conn.send(outgoingData)
-          // console.log(conn.send(outgoingData));
-          conn.on('data', (data) => {
-            console.log('receiving data ' + data)
-            switch (data.header) {
-              case 'Update Root Peer GameState after Init Connection':
-                console.log('Updating root peer with new connection data');
-                this.state.gameState = data.gameState
-                var outgoingData = {
-                  header : 'Update Peers on New Connection',
-                  gameState : this.state.gameState
-                }
-                this.emit(outgoingData)
-                this.forceUpdate()
-  
-                break;
-              
-              default:
-  
-            }
-          })
-        })
-      })
+
   }
   
   // handle outgoing peer connections to root peer  
@@ -137,58 +126,59 @@ class App extends React.Component {
       
       peer.on('open', (data) => {
         console.log('peer ' + playerId + ' created')
-        this.setState({creationSuccessful: 'none'})
         var conn = peer.connect(destPeer, {
           reliable: true
         })
-  
+        
         conn.on('open', () => { 
           console.log('connection between peer ' + playerId + ' and initPeer made')
+          
           conn.on('data', (data) => {
-            this.forceUpdate()
+            // this.forceUpdate()
             console.log(data.header)
             console.log(data.gameState)    
+            
             switch (data.header) {
+              
               case 'Initialize Player Info':
                 console.log('initing player info');
-                console.log(data.gameState);
-                console.log(this.state)
-                this.state.gameState = data.gameState
-                console.log(data.gameState);
-                console.log(this.state)
+                this.setState({creationSuccessful: 'none'})
                 this.setState({playerId: playerId})
-                this.state.gameState.playerCount++;
+                this.setState({roomId: destPeer})
                 
+                var tempGamestate = {...data.gameState, playerCount : data.gameState.playerCount + 1}
                 // creating deck/player info for new peer
                 var temp = []
                 while (temp.length != 7){
                   var key = Math.floor(Math.random() * 52)
                   if (!temp.includes(key)){
-                    this.state.gameState.cardsHandedOut.push(key)
+                    tempGamestate.cardsHandedOut.push(key)
                     // this.state.gameState.playerInfo[playerId].cards.push(this.deck[key])
                     temp.push(this.deck[key])
                   }
                 }
-                this.state.gameState.playerInfo[playerId] = {
+                tempGamestate.playerInfo.push({
                   cardCount : 7,
                   cards : temp,
                   name : playerId 
-                }
+                })
                 
-                console.log(this.state);
-                var outgoingData = {
-                  header : 'Update Root Peer GameState after Init Connection',
-                  gameState : this.state.gameState
-                }
-                conn.send(outgoingData)
-                this.forceUpdate()
+                this.setState({gameState : tempGamestate}, () => {
+                  console.log(this.state);
+                  var outgoingData = {
+                    header : 'Update Root Peer GameState after Init Connection',
+                    gameState : this.state.gameState
+                  }
+                  conn.send(outgoingData)
+                })
+                // this.forceUpdate()
 
                 break;
 
               case 'Update Peers on New Connection':
                 console.log('updating peers with new connection');
-                this.state.gameState = data.gameState
-                this.forceUpdate()
+                this.setState({gameState : data.gameState})
+                // this.forceUpdate()
                 break;
               
               default:
@@ -208,10 +198,32 @@ class App extends React.Component {
   }
 
   emit(data){
-    console.log('emitting data' + data)
+    console.log('emitting data')
+    console.log(data)
     this.state.initPeerConns.forEach((conn) => {
       conn.send(data)
     })
+  }
+
+  initializePlayerInfo(data, isRootPeer){
+    var tempGamestate = {...data.gameState, playerCount : data.gameState.playerCount + 1}
+    // creating deck/player info for new peer
+    var temp = []
+    while (temp.length != 7){
+      var key = Math.floor(Math.random() * 52)
+      if (!temp.includes(key)){
+        tempGamestate.cardsHandedOut.push(key)
+        // this.state.gameState.playerInfo[playerId].cards.push(this.deck[key])
+        temp.push(this.deck[key])
+      }
+    }
+    tempGamestate.playerInfo.push({
+      cardCount : 7,
+      cards : temp,
+      name : data.playerId 
+    })
+
+    return tempGamestate
   }
 
   render(){
@@ -226,8 +238,17 @@ class App extends React.Component {
           <button onClick={() => this.join(this.state.roomId, this.state.playerId)}>Join</button>
         </div>
 
-        {this.state.gameState.playerInfo[this.state.playerId] != null && 
-          <p>Here are your cards: {this.state.gameState.playerInfo[this.state.playerId].cards}</p>
+        {/* {console.log(this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId && elem.name != ''))}
+        {console.log(this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId))} */}
+        {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId && elem.name != '').length != 0 &&
+        <div>
+          <div>
+            <p>Here are your cards: {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards}</p>
+          </div>
+          <div style={{float : 'right'}}>
+            <p>Players: {this.state.gameState.playerInfo.filter(elem => elem.name != '').map(x => x.name)}</p>
+          </div> 
+        </div>
         }
       </div>
 
