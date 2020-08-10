@@ -16,6 +16,7 @@ class App extends React.Component {
         playerCount : 0,
         cardsHandedOut : [], 
         turn : '',
+        isStarted : false,
         playerInfo : [{
             cardCount : 0,
             cards : [],
@@ -146,22 +147,7 @@ class App extends React.Component {
                 this.setState({playerId: playerId})
                 this.setState({roomId: destPeer})
                 
-                var tempGamestate = {...data.gameState, playerCount : data.gameState.playerCount + 1}
-                // creating deck/player info for new peer
-                var temp = []
-                while (temp.length != 7){
-                  var key = Math.floor(Math.random() * 52)
-                  if (!temp.includes(key)){
-                    tempGamestate.cardsHandedOut.push(key)
-                    // this.state.gameState.playerInfo[playerId].cards.push(this.deck[key])
-                    temp.push(this.deck[key])
-                  }
-                }
-                tempGamestate.playerInfo.push({
-                  cardCount : 7,
-                  cards : temp,
-                  name : playerId 
-                })
+                var tempGamestate = this.initializePlayerInfo({...data, playerId: playerId} , false)
                 
                 this.setState({gameState : tempGamestate}, () => {
                   console.log(this.state);
@@ -206,11 +192,12 @@ class App extends React.Component {
   }
 
   initializePlayerInfo(data, isRootPeer){
+    console.log('initialize player info func');
     var tempGamestate = {...data.gameState, playerCount : data.gameState.playerCount + 1}
     // creating deck/player info for new peer
     var temp = []
     while (temp.length != 7){
-      var key = Math.floor(Math.random() * 52)
+      var key = Math.floor(Math.random() * 56)
       if (!temp.includes(key)){
         tempGamestate.cardsHandedOut.push(key)
         // this.state.gameState.playerInfo[playerId].cards.push(this.deck[key])
@@ -244,6 +231,7 @@ class App extends React.Component {
         <div>
           <div>
             <p>Here are your cards: {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards}</p>
+            {/* {this.state.gameState.isStarted && <button onClick={() => this.start()}>Start Game</button>}   */}
           </div>
           <div style={{float : 'right'}}>
             <p>Players: {this.state.gameState.playerInfo.filter(elem => elem.name != '').map(x => x.name)}</p>
