@@ -16,6 +16,7 @@ class App extends React.Component {
         playerCount : 0,
         cardsHandedOut : [], 
         turn : '',
+        currentCard : '',
         isStarted : false,
         playerInfo : [{
             cardCount : 0,
@@ -193,6 +194,7 @@ class App extends React.Component {
 
   initializePlayerInfo(data, isRootPeer){
     console.log('initialize player info func');
+    
     var tempGamestate = {...data.gameState, playerCount : data.gameState.playerCount + 1}
     // creating deck/player info for new peer
     var temp = []
@@ -204,11 +206,16 @@ class App extends React.Component {
         temp.push(this.deck[key])
       }
     }
+    
     tempGamestate.playerInfo.push({
       cardCount : 7,
       cards : temp,
       name : data.playerId 
     })
+
+    if(isRootPeer){
+      tempGamestate.currentCard = this.deck[Math.floor(Math.random() * 56)]
+    }
 
     return tempGamestate
   }
