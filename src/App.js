@@ -12,17 +12,15 @@ class App extends React.Component {
       initPeerConns : [],
       creationSuccessful : 'block',
       playerId : '',
+      isRootPeer : false,
       gameState : {
         playerCount : 0,
         cardsHandedOut : [], 
         turn : '',
+        direction : 1,
         currentCard : '',
         isStarted : false,
-        playerInfo : [{
-            cardCount : 0,
-            cards : [],
-            name : ''
-          }
+        playerInfo : [
         ]
       }
     }
@@ -33,13 +31,15 @@ class App extends React.Component {
     this.create = this.create.bind(this)
     this.emit = this.emit.bind(this)
     this.initializePlayerInfo = this.initializePlayerInfo.bind(this)
+    this.start = this.start.bind(this)
+    this.playCard = this.playCard.bind(this)
   }
   
-  deck = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9', 'gskip', 'grev', 'gp2', 
-          'y0', 'y1', 'y2', 'y3', 'y4', 'y5', 'y6', 'y7', 'y8', 'y9', 'yskip', 'yrev', 'yp2', 
-          'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'rskip', 'rrev', 'rp2', 
-          'b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'bskip', 'brev', 'bp2',
-          'scol', 'scol', 'sp4', 'sp4' ]
+  deck = ['g 0', 'g 1', 'g 2', 'g 3', 'g 4', 'g 5', 'g 6', 'g 7', 'g 8', 'g 9', 'g skip', 'g rev', 'g p2', 
+          'y 0', 'y 1', 'y 2', 'y 3', 'y 4', 'y 5', 'y 6', 'y 7', 'y 8', 'y 9', 'y skip', 'y rev', 'y p2', 
+          'r 0', 'r 1', 'r 2', 'r 3', 'r 4', 'r 5', 'r 6', 'r 7', 'r 8', 'r 9', 'r skip', 'r rev', 'r p2', 
+          'b 0', 'b 1', 'b 2', 'b 3', 'b 4', 'b 5', 'b 6', 'b 7', 'b 8', 'b 9', 'b skip', 'b rev', 'b p2',
+          's col', 's col', 's p4', 's p4' ]
   
   handleRoomIdChange(event) {
     this.setState({roomId: event.target.value});
@@ -60,7 +60,8 @@ class App extends React.Component {
         this.setState({playerId: playerId})
         this.setState({roomId: roomId})
         this.setState({gameState : this.initializePlayerInfo(this.state, true)})
-
+        this.setState({isRootPeer : true})
+        
         console.log('createdInitPeer made')
         console.log(this.state.gameState)
         // this.forceUpdate()
@@ -167,6 +168,12 @@ class App extends React.Component {
                 this.setState({gameState : data.gameState})
                 // this.forceUpdate()
                 break;
+
+              case 'Starting game':
+                console.log('game starting')
+                this.setState({gameState : data})
+                console.log(this.state)
+                break;
               
               default:
 
@@ -220,6 +227,50 @@ class App extends React.Component {
     return tempGamestate
   }
 
+  start(){
+    this.setState({isStarted : true})
+    this.setState({turn : this.state.playerId})
+
+    var outgoingData = {
+      header : 'Starting Game',
+      data : this.state.gameState
+    } 
+
+    this.emit(outgoingData)
+  }
+
+  playCard(card){
+    console.log('playCard');
+    
+    if (!this.isStarted){
+      window.alert('Game must be started')
+      return
+    }
+    
+    var tempGamestate = this.state.gameState
+
+    var cardClass = this.state.gameState.card.split(' ')[0]
+    var cardValue = this.state.gameState.card.split(' ')[1]
+    var playCardClass = card.split(' ')[0]
+    var playCardValue = card.split(' ')[1]
+
+    if(playCardClass == cardClass || playCardValue == cardValue || playCardClass == 's'){
+
+    }
+    else {
+      window.alert('Cannot play this card')
+    }
+
+    var newDeck = tempGamestate.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards.filter(x => x != card)
+    tempGamestate.playerInfo.forEach(elem => {
+      if (elem.name == this.state.playerId){
+        elem.cards = newDeck
+      }
+    })
+
+    this.setState({gameState : tempGamestate})
+  }
+
   render(){
     return (
       <div>
@@ -237,8 +288,16 @@ class App extends React.Component {
         {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId && elem.name != '').length != 0 &&
         <div>
           <div>
-            <p>Here are your cards: {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards}</p>
-            {/* {this.state.gameState.isStarted && <button onClick={() => this.start()}>Start Game</button>}   */}
+            <div>
+              <p>Here are your cards: </p>
+              {this.state.gameState.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards.map((elem) => {
+                // console.log(elem);
+                return (<button onClick={() => this.playCard(elem)}> {elem} </button>)
+              })}
+            </div>
+            <p>Current Card: {this.state.gameState.currentCard}</p>
+            {(!(this.state.gameState.isStarted) && this.state.isRootPeer) && <button onClick={() => this.start()}>Start Game</button>}  
+            {(!(this.state.gameState.isStarted) && !(this.state.isRootPeer)) && <p>Waiting for root peer to start game</p>}  
           </div>
           <div style={{float : 'right'}}>
             <p>Players: {this.state.gameState.playerInfo.filter(elem => elem.name != '').map(x => x.name)}</p>
