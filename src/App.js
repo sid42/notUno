@@ -10,13 +10,15 @@ class App extends React.Component {
       roomId : '',
       initPeer : '',
       initPeerConns : [],
+      joinedPeerConn : '',
       creationSuccessful : 'block',
       playerId : '',
       isRootPeer : false,
       gameState : {
         playerCount : 0,
         cardsHandedOut : [], 
-        turn : '',
+        winner : '', 
+        turn : 0,
         direction : 1,
         currentCard : '',
         isStarted : false,
@@ -29,7 +31,8 @@ class App extends React.Component {
     this.handlePlayerIdChange = this.handlePlayerIdChange.bind(this);
     this.join = this.join.bind(this)
     this.create = this.create.bind(this)
-    this.emit = this.emit.bind(this)
+    this.emitFromCreatedPeer = this.emitFromCreatedPeer.bind(this)
+    this.emitFromJoinedPeer = this.emitFromJoinedPeer.bind(this)
     this.initializePlayerInfo = this.initializePlayerInfo.bind(this)
     this.start = this.start.bind(this)
     this.playCard = this.playCard.bind(this)
@@ -94,11 +97,47 @@ class App extends React.Component {
                       header : 'Update Peers on New Connection',
                       gameState : this.state.gameState
                     }
-                    this.emit(outgoingData)
+                    this.emitFromCreatedPeer(outgoingData)
                   })
                   // this.forceUpdate()
-    
-                  break;
+                  
+                  break
+
+                case 'Card Played':
+                  console.log('Updating root peer move data');
+                  this.setState({gameState : data.gameState}, () => {
+                    var outgoingData = {
+                      header : 'Card Played',
+                      gameState : this.state.gameState
+                    }
+                    this.emitFromCreatedPeer(outgoingData)
+                  })
+                  
+                  break
+
+
+                case 'Card Drawn':
+                  console.log('Updating root peer move data');
+                  this.setState({gameState : data.gameState}, () => {
+                    var outgoingData = {
+                      header : 'Card Drawn',
+                      gameState : this.state.gameState
+                    }
+                    this.emitFromCreatedPeer(outgoingData)
+                  })
+                  
+                  break
+                // case 'Emitting from joined peer':
+                //   console.log('emitting joined peer data')
+                //   this.setState({gameState : data.emittingData.gameState}, () => {
+                //     var outgoingData = {
+                //       header : 'Update Peers With Emitted Data',
+                //       gameState : this.state.gameState
+                //     }
+                //     this.emitFromCreatedPeer(outgoingData)
+                //   })
+                //   break
+                
                 
                 default:
     
@@ -135,6 +174,7 @@ class App extends React.Component {
         
         conn.on('open', () => { 
           console.log('connection between peer ' + playerId + ' and initPeer made')
+          this.setState({joinedPeerConn : conn})
           
           conn.on('data', (data) => {
             // this.forceUpdate()
@@ -168,10 +208,20 @@ class App extends React.Component {
                 this.setState({gameState : data.gameState})
                 // this.forceUpdate()
                 break;
+              
+              case 'Card Played':
+                console.log('updating peers with move data');
+                this.setState({gameState : data.gameState})
+                break;
 
-              case 'Starting game':
+              case 'Card Drawn':
+                console.log('updating peers with draw data');
+                this.setState({gameState : data.gameState})
+                break;
+  
+              case 'Starting Game':
                 console.log('game starting')
-                this.setState({gameState : data})
+                this.setState({gameState : data.gameState})
                 console.log(this.state)
                 break;
               
@@ -191,8 +241,8 @@ class App extends React.Component {
       console.log(peer)
   }
 
-  emit(data){
-    console.log('emitting data')
+  emitFromCreatedPeer(data){
+    console.log('emitFromCreatedPeerting data')
     console.log(data)
     this.state.initPeerConns.forEach((conn) => {
       conn.send(data)
@@ -228,47 +278,174 @@ class App extends React.Component {
   }
 
   start(){
-    this.setState({isStarted : true})
-    this.setState({turn : this.state.playerId})
-
-    var outgoingData = {
-      header : 'Starting Game',
-      data : this.state.gameState
-    } 
-
-    this.emit(outgoingData)
+    var tempGamestate = this.state.gameState
+    tempGamestate.isStarted = true
+    tempGamestate.turn = 0
+    tempGamestate.direction = -1
+    
+    this.setState({gameState : tempGamestate}, () => {
+      var outgoingData = {
+        header : 'Starting Game',
+        gameState : this.state.gameState
+      } 
+  
+      this.emitFromCreatedPeer(outgoingData)
+    })
   }
 
   playCard(card){
     console.log('playCard');
+    console.log(this.state);
+    var tempGamestate = this.state.gameState
     
-    if (!this.isStarted){
+    if (!tempGamestate.isStarted){
       window.alert('Game must be started')
       return
     }
-    
-    var tempGamestate = this.state.gameState
 
-    var cardClass = this.state.gameState.card.split(' ')[0]
-    var cardValue = this.state.gameState.card.split(' ')[1]
+    if (tempGamestate.playerInfo[tempGamestate.turn].name != this.state.playerId){
+      window.alert('Not your turn yet!')
+      return
+    }
+
+    if (tempGamestate.winner != ''){
+      window.alert('Winner is ' + tempGamestate.winner + '!')
+      return
+    }
+    
+    console.log(tempGamestate)
+    var cardClass = tempGamestate.currentCard.split(' ')[0]
+    var cardValue = tempGamestate.currentCard.split(' ')[1]
     var playCardClass = card.split(' ')[0]
     var playCardValue = card.split(' ')[1]
+    var currTurn = tempGamestate.turn
 
-    if(playCardClass == cardClass || playCardValue == cardValue || playCardClass == 's'){
+    if (playCardClass == cardClass || playCardValue == cardValue || playCardClass == 's'){
+      if (playCardValue == 'skip'){
+        tempGamestate.turn = ((tempGamestate.turn + 2*(tempGamestate.direction)) % tempGamestate.playerInfo.length)
+      }
+      else if (playCardValue == 'rev'){
+        if (tempGamestate.playerInfo.length != 2){
+          tempGamestate.direction = -(tempGamestate.direction)
+          tempGamestate.turn = ((tempGamestate.turn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+        }
+      }
+      else if (playCardValue == 'p2'){
+        var tempTurn = tempGamestate.turn
+        tempTurn = ((tempTurn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+        if(tempTurn < 0){
+          tempTurn = tempGamestate.playerInfo.length + tempTurn 
+        }
 
+        for (var i=0; i<2; i++){
+          tempGamestate.playerInfo[tempTurn].cards.push(this.deck[Math.floor(Math.random() * 56)])
+        }
+
+        tempGamestate.turn = ((tempGamestate.turn + 2*(tempGamestate.direction)) % tempGamestate.playerInfo.length)
+      }
+      else if (playCardClass == 's'){
+        var selectedColor = window.prompt('Choose color: ').charAt(0).toLowerCase()
+        card = selectedColor
+        console.log(card);
+        
+        if (playCardValue == 'p4'){
+          var tempTurn = tempGamestate.turn
+          tempTurn = ((tempTurn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+          if(tempTurn < 0){
+            tempTurn = tempGamestate.playerInfo.length + tempTurn 
+          }
+  
+          for (var i=0; i<4; i++){
+            tempGamestate.playerInfo[tempTurn].cards.push(this.deck[Math.floor(Math.random() * 56)])
+          }
+
+          tempGamestate.turn = ((tempGamestate.turn + 2*(tempGamestate.direction)) % tempGamestate.playerInfo.length)
+        }
+        else{
+          tempGamestate.turn = ((tempGamestate.turn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+        }
+
+      }
+      else {
+        tempGamestate.turn = ((tempGamestate.turn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+      }
+
+      if(tempGamestate.turn < 0){
+        tempGamestate.turn = tempGamestate.playerInfo.length + tempGamestate.turn 
+      }
+
+      //these loops can be optimised using (previous) turn
+      tempGamestate.currentCard = card
+      var newDeck = tempGamestate.playerInfo[currTurn].cards.filter(x => x != card)
+      tempGamestate.playerInfo[currTurn].cards = newDeck
+      if (newDeck.length == 0){
+        tempGamestate.winner = tempGamestate.playerInfo[currTurn].name
+      }
+
+      this.setState({gameState : tempGamestate}, () => {
+        var data = {
+          header : 'Card Played',
+          gameState : this.state.gameState
+        }
+        
+        if (this.state.isRootPeer){
+          this.emitFromCreatedPeer(data)
+        }
+        else{
+          this.state.joinedPeerConn.send(data)
+        }
+      })
     }
     else {
-      window.alert('Cannot play this card')
+      window.alert('Cannot play this card, draw a card if needed')
+      return
     }
 
-    var newDeck = tempGamestate.playerInfo.filter(elem => elem.name == this.state.playerId)[0].cards.filter(x => x != card)
-    tempGamestate.playerInfo.forEach(elem => {
-      if (elem.name == this.state.playerId){
-        elem.cards = newDeck
+  }
+
+  drawCard(){
+    console.log('drawCard');
+    console.log(this.state);
+    var tempGamestate = this.state.gameState
+    
+    if (!tempGamestate.isStarted){
+      window.alert('Game must be started')
+      return
+    }
+
+    if (tempGamestate.playerInfo[tempGamestate.turn].name != this.state.playerId){
+      window.alert('Not your turn yet!')
+      return
+    }
+
+    tempGamestate.playerInfo[tempGamestate.turn].cards.push(this.deck[Math.floor(Math.random() * 56)])
+    tempGamestate.turn = ((tempGamestate.turn + tempGamestate.direction) % tempGamestate.playerInfo.length)
+    if(tempGamestate.turn < 0){
+      tempGamestate.turn = tempGamestate.playerInfo.length + tempGamestate.turn 
+    }
+
+    this.setState({gameState : tempGamestate}, () => {
+      var data = {
+        header : 'Card Drawn',
+        gameState : this.state.gameState
+      }
+      
+      if (this.state.isRootPeer){
+        this.emitFromCreatedPeer(data)
+      }
+      else{
+        this.state.joinedPeerConn.send(data)
       }
     })
+  }
 
-    this.setState({gameState : tempGamestate})
+  emitFromJoinedPeer(data){
+    console.log('emitting from joined peer')
+    var outgoingData = {
+      header : 'Emitting from joined peer',
+      emittingData : data
+    }
+    this.state.joinedPeerConn.send(outgoingData)
   }
 
   render(){
@@ -297,10 +474,18 @@ class App extends React.Component {
             </div>
             <p>Current Card: {this.state.gameState.currentCard}</p>
             {(!(this.state.gameState.isStarted) && this.state.isRootPeer) && <button onClick={() => this.start()}>Start Game</button>}  
-            {(!(this.state.gameState.isStarted) && !(this.state.isRootPeer)) && <p>Waiting for root peer to start game</p>}  
+            {(!this.state.gameState.isStarted) &&
+              <div>
+                <div> 
+                  <p>Waiting for root peer to start game</p>
+                </div>
+              </div>
+            }  
           </div>
           <div style={{float : 'right'}}>
             <p>Players: {this.state.gameState.playerInfo.filter(elem => elem.name != '').map(x => x.name)}</p>
+            <button onClick={() => this.drawCard()}>Draw</button>
+            {this.state.gameState.winner != '' && <p>Winner: {this.state.gameState.winner}</p>}
           </div> 
         </div>
         }
